@@ -1,0 +1,135 @@
+#include <ArtnetWifi.h>
+#include <ThingSpeak.h>
+#include <HTTPClient.h>
+#include <WiFi.h>
+#include "ThingSpeak.h"
+const char* ssid = "Galaxy";
+const char* password = "12345678";
+unsigned long myChannelNumber = 2279465;
+const char * myWriteAPIKey = "JL7QIICT59U3Q89X";
+const char*server="api.thingspeak.com";
+String servername="https://api.thingspeak.com/update?api_key=JL7QIICT59U3Q89X&field1=0";
+WiFiClient client;
+#define AOUT_PIN_1 32 // ESP32 pin GIOP36 (ADC0) that connects to AOUT pin of moisture sensor
+#define AOUT_PIN_2 35 // ESP32 pin GIOP36 (ADC0) that connects to AOUT pin of moisture sensor
+
+#include "DHT.h"
+#define DHT22PIN_1 12
+#define DHT22PIN_2 13
+
+DHT dht_1(DHT22PIN_1, DHT11);
+DHT dht_2(DHT22PIN_2, DHT11);
+
+//////////////
+void setup()
+{
+  Serial.begin(115200);
+  delay(1000);
+  dht_1.begin();
+  dht_2.begin();
+ 
+  WiFi.mode(WIFI_STA); //Optional
+  WiFi.begin(ssid, password);
+  Serial.println("\nConnecting");
+
+  while(WiFi.status()!= WL_CONNECTED)
+  {
+    Serial.print(".");
+    delay(100);
+  }
+
+    Serial.println("\nConnected to the WiFi network");
+    Serial.print("Local ESP32 IP: ");
+    Serial.println(WiFi.localIP());
+
+}
+void loop()
+{
+// // put your main code here, to run repeatedly:
+ int value_1 = analogRead(AOUT_PIN_1); // read the analog value from sensor
+ int moisture_percentage_1 = ( 150 - ( (value_1/1023.00) * 100 ) );
+ int value_2 = analogRead(AOUT_PIN_2); // read the analog value from sensor
+ int moisture_percentage_2 = ( 150 - ( (value_2/1023.00) * 100 ) );
+ Serial.print("Moisture value_1: ");
+ Serial.println(moisture_percentage_1);
+ Serial.print("Moisture value_2: ");
+ Serial.println(moisture_percentage_2);
+ 
+ delay(500);
+
+ 
+  float humi_1 = dht_1.readHumidity();
+  float temp_1 = dht_1.readTemperature();
+  Serial.print("Temperature_1: ");
+  Serial.print(temp_1);
+  Serial.print("ºC ");
+  Serial.print("Humidity_1: ");
+  Serial.println(humi_1);
+  delay(100);
+
+  float humi_2 = dht_2.readHumidity();
+  float temp_2 = dht_2.readTemperature();
+  Serial.print("Temperature_2: ");
+  Serial.print(temp_2);
+  Serial.print("ºC ");
+  Serial.print("Humidity_2: ");
+  Serial.println(humi_2);
+  delay(200);
+ 
+//...........................................................................
+ 
+  float av = (moisture_percentage_1 + moisture_percentage_2)/2;
+  //float av = 50;
+  if (av <= 44.0)
+  {
+   digitalWrite(33, LOW);
+   delay(100);
+     
+   Serial.println(" volve should be on. ");
+   
+  }
+  else
+  {
+    //digitalWrite(pin_mist, LOW);   // Turn off the misting device
+   digitalWrite(33, HIGH);
+   delay(100);
+   
+   
+   Serial.println("volve should be off. ");
+  }
+  Serial.println("**********||*********");
+  delay(500);
+ 
+ 
+ if(WiFi.status()== WL_CONNECTED){
+ sendData(moisture_percentage_1, moisture_percentage_2, humi_1, temp_1, humi_2, temp_2);
+ //sendDataToSheet();
+ }
+ else {
+ Serial.println("WiFi Disconnected");
+ }
+ 
+}
+void sendData(int moisture_percentage_1, int moisture_percentage_2, int humi_1, int temp_1,int humi_2, int temp_2 )
+{
+ HTTPClient http; // Initialize our HTTP client
+ String url = servername + "&field1=" + moisture_percentage_1 + "&field2=" + moisture_percentage_2 + "&field3=" + humi_1 + "&field4=" + temp_1 + "&field5=" + humi_2 + "&field6=" + temp_2 ;
+ 
+ 
+ http.begin(url.c_str()); // Initialize our HTTP request
+
+ 
+ int httpResponseCode = http.GET(); // Send HTTP request
+ 
+ if (httpResponseCode > 0)
+ { // Check for good HTTP status code
+ Serial.print("HTTP Response code: ");
+ Serial.println(httpResponseCode);
+ }
+ else
+ {
+ Serial.print("Error code: ");
+ Serial.println(httpResponseCode);
+ }
+ http.end();
+}
